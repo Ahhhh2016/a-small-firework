@@ -73,17 +73,24 @@
             left: 0;
         }
 
-        /* Mobile Touch: We use a class 'open' toggled by JS for better mobile ux, 
-           or rely on the hover mechanics if supported. 
-           For this demo, we'll assume touch on edge opens it. */
-
         .menu-title {
             text-align: center;
-            font-size: 1.2rem;
-            letter-spacing: 2px;
-            color: rgba(255, 255, 255, 0.8);
-            margin-bottom: 20px;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 5px;
             text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .menu-tagline {
+            text-align: center;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 25px;
+            font-style: italic;
+            font-family: 'Georgia', serif;
+            padding: 0 10px;
         }
 
         /* Transparent Buttons */
@@ -116,22 +123,66 @@
             box-shadow: 0 0 15px rgba(168, 192, 255, 0.2);
         }
 
+        /* Special style for the auto-play button to differentiate it slightly */
+        #btn-autoplay {
+            margin-top: 25px; /* More separation from manual options */
+            border-color: rgba(255, 220, 100, 0.3); /* Warm gold border */
+            color: rgba(255, 235, 180, 0.9); /* Warm text color */
+            font-family: 'Georgia', serif; /* Serif font for a literary feel */
+            font-style: italic;
+            transition: all 0.5s ease;
+        }
+
+        #btn-autoplay:hover {
+            background: rgba(255, 220, 100, 0.1);
+            border-color: rgba(255, 220, 100, 0.6);
+            color: #fff;
+            padding-left: 25px;
+        }
+
+        #btn-autoplay.active {
+            background: rgba(255, 220, 100, 0.15);
+            border-color: rgba(255, 220, 100, 1);
+            color: #fff;
+            box-shadow: 0 0 20px rgba(255, 200, 50, 0.15);
+            text-shadow: 0 0 5px rgba(255, 200, 50, 0.5);
+        }
+
         /* Help Text */
         #hint {
             position: absolute;
-            bottom: 20px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             width: 100%;
             text-align: center;
-            color: rgba(255,255,255,0.3);
+            color: rgba(255, 240, 220, 0.9); /* Warm candlelight color */
             pointer-events: none;
             z-index: 5;
-            font-size: 0.9rem;
-            animation: pulse 3s infinite;
+            font-family: 'Georgia', 'Times New Roman', serif; /* Classical, warm feel */
+            font-size: 1.5rem;
+            font-style: italic;
+            letter-spacing: 1px;
+            text-shadow: 0 0 15px rgba(255, 200, 100, 0.2);
+            opacity: 0;
+            animation: warmFade 6s ease-out forwards;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 0.3; }
-            50% { opacity: 0.6; }
+        #hint span {
+            display: block;
+            margin-top: 10px;
+            font-size: 1rem;
+            font-family: 'Segoe UI', sans-serif;
+            opacity: 0.7;
+            font-style: normal;
+            letter-spacing: 0.5px;
+        }
+
+        @keyframes warmFade {
+            0% { opacity: 0; transform: translate(-50%, -40%); }
+            15% { opacity: 1; transform: translate(-50%, -50%); }
+            70% { opacity: 1; transform: translate(-50%, -50%); }
+            100% { opacity: 0; transform: translate(-50%, -60%); }
         }
 
     </style>
@@ -145,14 +196,22 @@
     <div id="trigger-zone"></div>
     
     <div id="sidebar">
-        <div class="menu-title">Pyrotechnics</div>
-        <button class="fw-option" onclick="setFireworkType('spark')">One Spark</button>
-        <button class="fw-option active" onclick="setFireworkType('bloom')">Bloom</button>
-        <button class="fw-option" onclick="setFireworkType('drift')">Drift</button>
-        <button class="fw-option" onclick="setFireworkType('scatter')">Scatter</button>
+        <div class="menu-title">A Small Firework</div>
+        <div class="menu-tagline">For quiet nights like this.</div>
+        <!-- Manual Options -->
+        <button class="fw-option" id="opt-spark" onclick="setFireworkType('spark')">One Spark</button>
+        <button class="fw-option active" id="opt-bloom" onclick="setFireworkType('bloom')">Bloom</button>
+        <button class="fw-option" id="opt-drift" onclick="setFireworkType('drift')">Drift</button>
+        <button class="fw-option" id="opt-scatter" onclick="setFireworkType('scatter')">Scatter</button>
+        
+        <!-- Auto Play Option -->
+        <button class="fw-option" id="btn-autoplay" onclick="toggleAutoPlay()">Stay and watch</button>
     </div>
 
-    <div id="hint">Click anywhere to launch • Touch left edge for menu</div>
+    <div id="hint">
+        Light one anywhere.
+        <span>The menu is on the left.</span>
+    </div>
 
     <!-- Import Three.js from CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -164,89 +223,132 @@
         let particles = [];
         let raycaster, mouse;
         
+        // Systems
+        let trailSystem;
+        
         // Configuration
         let currentType = 'bloom';
-        const gravity = new THREE.Vector3(0, -0.05, 0);
+        
+        // Auto Play State
+        let isAutoPlay = false;
+        let autoPlayTimer = 0;
         
         // Texture cache
         let particleTexture;
 
-        init();
-        animate();
+        // Note: Execution calls init() and animate() are moved to the end of the script
 
-        function init() {
-            // Container
-            const container = document.getElementById('canvas-container');
+        // --- 2. Class Definitions ---
 
-            // Scene
-            scene = new THREE.Scene();
-            // Fog to blend particles into the background distance
-            scene.fog = new THREE.FogExp2(0x111116, 0.002);
+        // Firework Trail System
+        class FireworkTrailSystem {
+            constructor(scene, texture) {
+                this.maxParticles = 10000;
+                this.geometry = new THREE.BufferGeometry();
+                this.positions = new Float32Array(this.maxParticles * 3);
+                this.colors = new Float32Array(this.maxParticles * 3);
+                this.opacities = new Float32Array(this.maxParticles);
+                this.sizes = new Float32Array(this.maxParticles);
+                
+                this.count = 0;
+                this.index = 0; // Circular buffer index
 
-            // Camera
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 0, 40);
-            camera.lookAt(0, 10, 0);
+                this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
+                this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
+                this.geometry.setAttribute('alpha', new THREE.BufferAttribute(this.opacities, 1));
+                this.geometry.setAttribute('size', new THREE.BufferAttribute(this.sizes, 1));
 
-            // Renderer
-            renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            container.appendChild(renderer.domElement);
+                // Shader Material
+                const material = new THREE.ShaderMaterial({
+                    uniforms: {
+                        pointTexture: { value: texture }
+                    },
+                    vertexShader: `
+                        attribute float alpha;
+                        attribute float size;
+                        varying vec3 vColor;
+                        varying float vAlpha;
+                        void main() {
+                            vColor = color;
+                            vAlpha = alpha;
+                            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                            gl_PointSize = size * (300.0 / -mvPosition.z);
+                            gl_Position = projectionMatrix * mvPosition;
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform sampler2D pointTexture;
+                        varying vec3 vColor;
+                        varying float vAlpha;
+                        void main() {
+                            gl_FragColor = vec4(vColor, vAlpha);
+                            gl_FragColor = gl_FragColor * texture2D(pointTexture, gl_PointCoord);
+                        }
+                    `,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false,
+                    transparent: true,
+                    vertexColors: true
+                });
 
-            // Raycaster for click interaction
-            raycaster = new THREE.Raycaster();
-            mouse = new THREE.Vector2();
+                this.mesh = new THREE.Points(this.geometry, material);
+                this.mesh.frustumCulled = false; 
+                scene.add(this.mesh);
+            }
 
-            // Create a soft glowing particle texture programmatically
-            particleTexture = createParticleTexture();
+            add(position, color, size = 1.0) {
+                const i = this.index;
+                const idx3 = i * 3;
 
-            // Event Listeners
-            window.addEventListener('resize', onWindowResize, false);
-            
-            // Mouse/Touch Interaction
-            // We use 'pointerdown' to handle both mouse and touch
-            document.addEventListener('pointerdown', onPointerDown, false);
-            
-            // Mobile Sidebar Helper
-            const trigger = document.getElementById('trigger-zone');
-            const sidebar = document.getElementById('sidebar');
-            
-            // Simple touch logic for mobile to ensure sidebar opens easily
-            trigger.addEventListener('touchstart', (e) => {
-                sidebar.style.left = '0';
-            });
-            document.addEventListener('touchstart', (e) => {
-                if(e.clientX > 220) {
-                    sidebar.style.left = '-220px';
+                this.positions[idx3] = position.x;
+                this.positions[idx3 + 1] = position.y;
+                this.positions[idx3 + 2] = position.z;
+
+                this.colors[idx3] = color.r;
+                this.colors[idx3 + 1] = color.g;
+                this.colors[idx3 + 2] = color.b;
+
+                this.opacities[i] = 1.0;
+                this.sizes[i] = size;
+
+                this.index = (this.index + 1) % this.maxParticles;
+                if (this.count < this.maxParticles) this.count++;
+            }
+
+            update() {
+                // Decay opacities
+                for (let i = 0; i < this.maxParticles; i++) {
+                    if (this.opacities[i] > 0) {
+                        this.opacities[i] *= 0.94; 
+                        if (this.opacities[i] < 0.01) this.opacities[i] = 0;
+                    }
                 }
-            });
+                
+                this.geometry.attributes.position.needsUpdate = true;
+                this.geometry.attributes.color.needsUpdate = true;
+                this.geometry.attributes.alpha.needsUpdate = true;
+                this.geometry.attributes.size.needsUpdate = true;
+            }
         }
-
-        // --- 2. Firework Logic ---
 
         class Firework {
             constructor(targetPosition, type) {
                 this.isExploded = false;
                 this.type = type;
-                this.life = 0;
                 
-                // Start position (bottom center-ish, randomized x)
+                // Start position
                 const startX = (Math.random() - 0.5) * 10;
                 this.position = new THREE.Vector3(startX, -30, 0);
                 this.target = targetPosition;
                 
-                // Calculate velocity to reach target
-                // Distance to travel
-                const distanceY = this.target.y - this.position.y;
-                // Simple physics: d = v*t (ignoring gravity for the rocket phase for simplicity, or compensating)
-                // Let's just tween it or use constant speed
+                // Reduced speed for slow ascent
+                const speed = 0.4;
                 this.velocity = new THREE.Vector3()
                     .subVectors(this.target, this.position)
                     .normalize()
-                    .multiplyScalar(1.5); // Speed of ascent
+                    .multiplyScalar(speed); 
 
-                // Create the rocket particle
+                // Geometry
                 const geometry = new THREE.BufferGeometry();
                 const vertices = new Float32Array([0, 0, 0]);
                 geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
@@ -265,27 +367,28 @@
                 this.rocket.position.copy(this.position);
                 scene.add(this.rocket);
                 
-                // Store color for explosion
                 this.color = material.color;
-                
-                // Trail system for the rocket
-                this.trailParticles = [];
             }
 
             update() {
                 if (!this.isExploded) {
-                    // Move rocket
-                    this.rocket.position.add(this.velocity);
-                    
-                    // Simple trail
-                    if (Math.random() > 0.3) {
-                        createTrailParticle(this.rocket.position, this.color);
+                    const distanceToTarget = this.rocket.position.distanceTo(this.target);
+                    const stepSize = this.velocity.length();
+
+                    // TRAIL EFFECT: One Spark leaves a dense trail
+                    if (this.type === 'spark') {
+                        trailSystem.add(this.rocket.position, this.color, 1.2);
                     }
 
-                    // Check if reached target (approximate)
-                    const dist = this.rocket.position.distanceTo(this.target);
-                    if (dist < 2 || this.rocket.position.y >= this.target.y) {
+                    if (distanceToTarget <= stepSize) {
+                        this.rocket.position.copy(this.target);
                         this.explode();
+                    } else {
+                        this.rocket.position.add(this.velocity);
+                        // Standard trail for others
+                        if (this.type !== 'spark' && Math.random() > 0.3) {
+                            // Minimal trail for non-spark
+                        }
                     }
                 }
             }
@@ -293,11 +396,54 @@
             explode() {
                 this.isExploded = true;
                 scene.remove(this.rocket);
-                createExplosion(this.rocket.position, this.type, this.color);
+                createExplosion(this.target, this.type, this.color);
             }
         }
 
-        // --- 3. Particle System (The Explosion) ---
+        // --- 3. Functions ---
+
+        function init() {
+            // Container
+            const container = document.getElementById('canvas-container');
+
+            // Scene
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x111116, 0.002);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 40);
+            camera.lookAt(0, 10, 0);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            // AutoClear is true, we manage trails via the system, not buffer clearing
+            container.appendChild(renderer.domElement);
+
+            // Raycaster
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            // Textures
+            particleTexture = createParticleTexture();
+
+            // Initialize Custom Trail System
+            trailSystem = new FireworkTrailSystem(scene, particleTexture);
+
+            // Listeners
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('pointerdown', onPointerDown, false);
+            
+            // Mobile Sidebar Helper
+            const trigger = document.getElementById('trigger-zone');
+            const sidebar = document.getElementById('sidebar');
+            trigger.addEventListener('touchstart', () => sidebar.style.left = '0');
+            document.addEventListener('touchstart', (e) => {
+                if(e.clientX > 220) sidebar.style.left = '-220px';
+            });
+        }
 
         function createExplosion(position, type, color) {
             let particleCount = 0;
@@ -307,26 +453,26 @@
             const colors = [];
             const sizes = [];
             const decays = [];
+            const targetSizes = []; 
 
-            // Configure based on type
             let baseSpeed = 0.5;
             
             switch (type) {
                 case 'spark':
-                    particleCount = 30;
-                    baseSpeed = 0.8;
+                    particleCount = 100; 
+                    baseSpeed = 0.2; 
                     break;
                 case 'bloom':
-                    particleCount = 150;
-                    baseSpeed = 0.6;
+                    particleCount = 200; 
+                    baseSpeed = 0.15; 
                     break;
                 case 'drift':
                     particleCount = 100;
-                    baseSpeed = 0.3;
+                    baseSpeed = 0.08; 
                     break;
                 case 'scatter':
                     particleCount = 80;
-                    baseSpeed = 0.9;
+                    baseSpeed = 0.25; 
                     break;
             }
 
@@ -335,55 +481,51 @@
 
                 // Initialize Color
                 const c = new THREE.Color().copy(color);
-                // Vary color slightly
                 c.offsetHSL(0, 0, (Math.random() - 0.5) * 0.2);
                 colors.push(c.r, c.g, c.b);
 
-                // Initialize Velocity
                 const v = new THREE.Vector3();
                 
                 if (type === 'bloom') {
-                    // Spherical uniform distribution
-                    const theta = Math.random() * Math.PI * 2;
-                    const phi = Math.acos((Math.random() * 2) - 1);
-                    const speed = (Math.random() * 0.2 + 0.8) * baseSpeed;
-                    
-                    v.x = speed * Math.sin(phi) * Math.cos(theta);
-                    v.y = speed * Math.sin(phi) * Math.sin(theta);
-                    v.z = speed * Math.cos(phi);
+                    const phi = Math.PI * (3 - Math.sqrt(5)); 
+                    const y = 1 - (i / (particleCount - 1)) * 2; 
+                    const radius = Math.sqrt(1 - y * y);
+                    const theta = phi * i;
+                    v.x = Math.cos(theta) * radius * baseSpeed;
+                    v.y = y * baseSpeed;
+                    v.z = Math.sin(theta) * radius * baseSpeed;
                 } 
+                else if (type === 'spark') {
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.acos(2 * Math.random() - 1);
+                    const r = Math.random() * baseSpeed;
+                    v.x = r * Math.sin(phi) * Math.cos(theta);
+                    v.y = r * Math.sin(phi) * Math.sin(theta);
+                    v.z = r * Math.cos(phi);
+                }
                 else if (type === 'drift') {
-                    // More horizontal spread, less vertical
                     const theta = Math.random() * Math.PI * 2;
                     const r = Math.random() * baseSpeed;
-                    v.x = r * Math.cos(theta) * 2; // Spread wide
-                    v.y = (Math.random() - 0.2) * 0.5; // Mild up/down
+                    v.x = r * Math.cos(theta) * 2; 
+                    v.y = (Math.random() - 0.2) * 0.5; 
                     v.z = r * Math.sin(theta) * 2;
                 }
-                else if (type === 'scatter') {
-                    // Random chaotic
-                    v.set(
-                        (Math.random() - 0.5) * 2,
-                        (Math.random() - 0.5) * 2,
-                        (Math.random() - 0.5) * 2
-                    ).normalize().multiplyScalar(Math.random() * baseSpeed * 2);
-                }
-                else { // spark
-                    // Sharp burst
-                    v.set(
-                        (Math.random() - 0.5),
-                        (Math.random() - 0.5),
-                        (Math.random() - 0.5)
-                    ).normalize().multiplyScalar(Math.random() * baseSpeed);
+                else {
+                    v.set((Math.random()-0.5)*2, (Math.random()-0.5)*2, (Math.random()-0.5)*2)
+                     .normalize().multiplyScalar(Math.random() * baseSpeed * 2);
                 }
 
-                velocities.push(v.x, v.y, v.z);
+                // Reduced upward momentum for the slower scale
+                velocities.push(v.x, v.y + 0.12, v.z);
                 
-                // Size
-                sizes.push((Math.random() * 1.5 + 0.5) * (type === 'spark' ? 2 : 1));
+                const finalSize = (Math.random() * 1.5 + 0.5) * (type === 'spark' ? 2 : 1);
+                targetSizes.push(finalSize);
+                
+                if (type === 'bloom') sizes.push(0.1); 
+                else sizes.push(finalSize);
 
-                // Decay rate (randomness prevents them disappearing all at once)
-                decays.push(0.005 + Math.random() * 0.015);
+                // Slower decay
+                decays.push(0.0008 + Math.random() * 0.003);
             }
 
             geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
@@ -403,24 +545,16 @@
             const particleSystem = new THREE.Points(geometry, material);
             scene.add(particleSystem);
 
-            // Add to active particles list
             particles.push({
                 mesh: particleSystem,
-                velocities: velocities, // plain array matching vertices
+                velocities: velocities,
+                targetSizes: targetSizes,
                 decays: decays,
                 type: type,
-                life: 1.0
+                life: 1.0,
+                age: 0
             });
         }
-
-        function createTrailParticle(pos, color) {
-            // Simple temporary particle logic for rocket tails
-            // Implemented as small sprites or points that fade fast
-            // To keep performance high, we usually use a single geometry buffer,
-            // but for simplicity here we'll skip complex pooling.
-        }
-
-        // --- 4. Utilities ---
 
         function createParticleTexture() {
             const canvas = document.createElement('canvas');
@@ -434,18 +568,58 @@
             gradient.addColorStop(1, 'rgba(0,0,0,0)');
             context.fillStyle = gradient;
             context.fillRect(0, 0, 32, 32);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // --- NEW: Toggle Auto Play Function ---
+        function toggleAutoPlay() {
+            isAutoPlay = !isAutoPlay;
             
-            const texture = new THREE.CanvasTexture(canvas);
-            return texture;
+            const btnAuto = document.getElementById('btn-autoplay');
+            const manualBtns = document.querySelectorAll('.fw-option:not(#btn-autoplay)');
+            
+            // Clear manual selection visuals
+            manualBtns.forEach(b => b.classList.remove('active'));
+            
+            if (isAutoPlay) {
+                btnAuto.classList.add('active');
+                btnAuto.innerText = "Pause"; // Change text to Pause
+                autoPlayTimer = 30; // Start almost immediately
+            } else {
+                btnAuto.classList.remove('active');
+                btnAuto.innerText = "Stay and watch"; // Revert text
+                // Re-highlight the last selected manual type
+                const currentBtn = document.getElementById('opt-' + currentType);
+                if(currentBtn) currentBtn.classList.add('active');
+            }
         }
 
         function setFireworkType(type) {
+            // Turning on manual type disables auto play
+            isAutoPlay = false;
             currentType = type;
             
-            // UI Update
-            const buttons = document.querySelectorAll('.fw-option');
+            const btnAuto = document.getElementById('btn-autoplay');
+            btnAuto.classList.remove('active');
+            btnAuto.innerText = "Stay and watch"; // Reset text if user clicks other options
+            
+            const buttons = document.querySelectorAll('.fw-option:not(#btn-autoplay)');
             buttons.forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
+            
+            const activeBtn = document.getElementById('opt-' + type);
+            if(activeBtn) activeBtn.classList.add('active');
+        }
+        
+        function launchRandomFirework() {
+            const types = ['spark', 'bloom', 'drift', 'scatter'];
+            const randomType = types[Math.floor(Math.random() * types.length)];
+            
+            // Random position in the sky (center focused but spread out)
+            const x = (Math.random() - 0.5) * 12; // Spread -6 to 6
+            const y = Math.random() * 8 + 4; // Height 4 to 12
+            const target = new THREE.Vector3(x, y, 0);
+            
+            fireworks.push(new Firework(target, randomType));
         }
 
         function onWindowResize() {
@@ -455,65 +629,65 @@
         }
 
         function onPointerDown(event) {
-            // Prevent interaction if clicking sidebar
             if (event.clientX < 220 && document.getElementById('sidebar').style.left === '0px') return;
-
-            // Get standard mouse coordinates (-1 to 1)
+            
+            // Clicking manually launches a firework. 
+            // We can decide if this stops autoplay or just adds to it. 
+            // For a "Stay and watch" feel, manual clicks can just coexist.
+            
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
             raycaster.setFromCamera(mouse, camera);
-
-            // We need a plane to click against.
-            // Create a mathematical plane at z=0 (center of fireworks)
             const planeZ = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
             const target = new THREE.Vector3();
             raycaster.ray.intersectPlane(planeZ, target);
-
-            // Don't launch if clicking too low (UI area?)
-            if(target) {
-                // Launch firework
-                fireworks.push(new Firework(target, currentType));
-            }
+            if(target) fireworks.push(new Firework(target, currentType));
         }
-
-        // --- 5. Animation Loop ---
 
         function animate() {
             requestAnimationFrame(animate);
 
+            // --- Auto Play Logic ---
+            if (isAutoPlay) {
+                autoPlayTimer--;
+                if (autoPlayTimer <= 0) {
+                    launchRandomFirework();
+                    // Next firework in 60 to 180 frames (approx 1-3 seconds)
+                    autoPlayTimer = Math.random() * 120 + 60;
+                }
+            }
+
+            // Update Trail System
+            trailSystem.update();
+
             // 1. Update Rocket Fireworks
             for (let i = fireworks.length - 1; i >= 0; i--) {
                 fireworks[i].update();
-                if (fireworks[i].isExploded) {
-                    fireworks.splice(i, 1);
-                }
+                if (fireworks[i].isExploded) fireworks.splice(i, 1);
             }
 
             // 2. Update Explosion Particles
             for (let i = particles.length - 1; i >= 0; i--) {
                 const p = particles[i];
                 const positions = p.mesh.geometry.attributes.position.array;
+                const sizes = p.mesh.geometry.attributes.size.array;
                 const colors = p.mesh.geometry.attributes.color.array;
                 
-                // Physics Config based on type
-                let drag = 0.96; // Air resistance
-                let grav = -0.05; // Gravity strength
+                // Physics Config
+                let drag = 0.99; 
+                let grav = -0.006; 
 
-                if (p.type === 'drift') {
-                    drag = 0.90; // High drag
-                    grav = -0.01; // Low gravity (floaty)
-                } else if (p.type === 'scatter') {
-                    drag = 0.98; // Low drag (flies fast)
-                }
+                if (p.type === 'bloom') { drag = 0.985; grav = -0.004; }
+                else if (p.type === 'drift') { drag = 0.98; grav = -0.001; }
+                else if (p.type === 'scatter') { drag = 0.995; }
 
-                let activeCount = 0;
+                p.age++;
 
                 for (let j = 0; j < p.velocities.length; j += 3) {
-                    // Apply Gravity to Velocity
+                    const vertexIndex = j / 3;
+
+                    // Gravity & Drag
                     p.velocities[j + 1] += grav;
-                    
-                    // Apply Drag
                     p.velocities[j] *= drag;
                     p.velocities[j + 1] *= drag;
                     p.velocities[j + 2] *= drag;
@@ -522,16 +696,30 @@
                     positions[j] += p.velocities[j];
                     positions[j + 1] += p.velocities[j + 1];
                     positions[j + 2] += p.velocities[j + 2];
+
+                    // TRAIL EFFECT: If "Spark", particles emit trails
+                    if (p.type === 'spark' && p.life > 0.2) {
+                        const pos = new THREE.Vector3(positions[j], positions[j+1], positions[j+2]);
+                        const col = new THREE.Color(colors[j], colors[j+1], colors[j+2]);
+                        trailSystem.add(pos, col, 0.5);
+                    }
+
+                    // BLOSSOM ANIMATION
+                    if (p.type === 'bloom' && p.age < 60) {
+                        const targetSize = p.targetSizes[vertexIndex];
+                        const progress = p.age / 60;
+                        const ease = 1 - Math.pow(1 - progress, 3);
+                        sizes[vertexIndex] = targetSize * ease;
+                    }
                 }
 
-                // Update Life/Opacity
-                p.life -= 0.01; // Base decay
+                // Slower life decay
+                p.life -= 0.002; 
                 p.mesh.material.opacity = p.life;
 
-                // Refresh Geometry
                 p.mesh.geometry.attributes.position.needsUpdate = true;
+                if (p.type === 'bloom') p.mesh.geometry.attributes.size.needsUpdate = true;
 
-                // Remove dead systems
                 if (p.life <= 0) {
                     scene.remove(p.mesh);
                     p.mesh.geometry.dispose();
@@ -543,6 +731,9 @@
             renderer.render(scene, camera);
         }
 
+        // --- 4. Execution ---
+        init();
+        animate();
     </script>
 </body>
 </html>
