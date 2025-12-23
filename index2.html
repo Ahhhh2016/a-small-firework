@@ -225,6 +225,7 @@
         
         // Systems
         let trailSystem;
+        let audioCtx; // Audio Context
         
         // Configuration
         let currentType = 'bloom';
@@ -236,11 +237,8 @@
         // Texture cache
         let particleTexture;
 
-        // Note: Execution calls init() and animate() are moved to the end of the script
-
         // --- 2. Class Definitions ---
 
-        // Firework Trail System
         class FireworkTrailSystem {
             constructor(scene, texture) {
                 this.maxParticles = 10000;
@@ -368,6 +366,9 @@
                 scene.add(this.rocket);
                 
                 this.color = material.color;
+                
+                // Play Launch Sound
+                if(audioCtx) playSoftLaunch();
             }
 
             update() {
@@ -444,8 +445,139 @@
                 if(e.clientX > 220) sidebar.style.left = '-220px';
             });
         }
+        
+        // --- Sound Functions ---
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playSoftLaunch() {
+            if (!audioCtx) return;
+            const ctx = audioCtx;
+            const noise = ctx.createBufferSource();
+            const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+
+            for (let i = 0; i < data.length; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+
+            noise.buffer = buffer;
+
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'highpass';
+            filter.frequency.setValueAtTime(300, ctx.currentTime);
+            filter.frequency.exponentialRampToValueAtTime(3000, ctx.currentTime + 0.4);
+
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0.001, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.2);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+
+            noise.connect(filter).connect(gain).connect(ctx.destination);
+            noise.start();
+        }
+
+        function playSparkle() {
+            if (!audioCtx) return;
+            const ctx = audioCtx;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.type = 'triangle';
+            osc.frequency.value = 1200 + Math.random() * 800;
+
+            gain.gain.setValueAtTime(0.001, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.03, ctx.currentTime + 0.05);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+
+            osc.connect(gain).connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.15);
+        }
+
+        function playSoftBloom() {
+            if (!audioCtx) return;
+            const ctx = audioCtx;
+            const now = ctx.currentTime;
+
+            for (let i = 0; i < 6; i++) {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.value = 400 + Math.random() * 1200;
+
+                gain.gain.setValueAtTime(0.001, now);
+                gain.gain.exponentialRampToValueAtTime(0.08, now + 0.03);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+                osc.connect(gain).connect(ctx.destination);
+                osc.start(now + i * 0.015);
+                osc.stop(now + 0.8);
+            }
+        }
+
+        function playShimmer() {
+            if (!audioCtx) return;
+            const ctx = audioCtx;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.type = 'triangle';
+            osc.frequency.value = 1800;
+
+            gain.gain.setValueAtTime(0.001, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.05, ctx.currentTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+
+            osc.connect(gain).connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 1.5);
+        }
+
+        function playSoftCrackle() {
+            if (!audioCtx) return;
+            if (Math.random() > 0.4) return;
+
+            const ctx = audioCtx;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.type = 'square';
+            osc.frequency.value = 2000 + Math.random() * 1000;
+
+            gain.gain.setValueAtTime(0.001, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.015, ctx.currentTime + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+
+            osc.connect(gain).connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.12);
+        }
+
 
         function createExplosion(position, type, color) {
+            
+            // Play Sound based on type
+            if(audioCtx) {
+                if (type === 'bloom') playSoftBloom();
+                else if (type === 'drift') playShimmer();
+                else if (type === 'scatter') {
+                     // For scatter, simulate a small burst of crackles
+                     for(let k=0; k<5; k++) setTimeout(playSoftCrackle, Math.random() * 200);
+                }
+                else if (type === 'spark') {
+                    // For spark, simulate a dense burst of crackles
+                     for(let k=0; k<8; k++) setTimeout(playSoftCrackle, Math.random() * 300);
+                }
+            }
+            
             let particleCount = 0;
             const geometry = new THREE.BufferGeometry();
             const positions = [];
@@ -571,8 +703,11 @@
             return new THREE.CanvasTexture(canvas);
         }
 
-        // --- NEW: Toggle Auto Play Function ---
+        // --- Toggle Auto Play Function ---
         function toggleAutoPlay() {
+            // Initialize audio on click interaction
+            initAudio();
+            
             isAutoPlay = !isAutoPlay;
             
             const btnAuto = document.getElementById('btn-autoplay');
@@ -595,6 +730,9 @@
         }
 
         function setFireworkType(type) {
+            // Initialize audio on click interaction
+            initAudio();
+            
             // Turning on manual type disables auto play
             isAutoPlay = false;
             currentType = type;
@@ -629,11 +767,10 @@
         }
 
         function onPointerDown(event) {
+            // Initialize Audio
+            initAudio();
+
             if (event.clientX < 220 && document.getElementById('sidebar').style.left === '0px') return;
-            
-            // Clicking manually launches a firework. 
-            // We can decide if this stops autoplay or just adds to it. 
-            // For a "Stay and watch" feel, manual clicks can just coexist.
             
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -649,6 +786,9 @@
 
             // --- Auto Play Logic ---
             if (isAutoPlay) {
+                // Occasional ambient sparkle sound in auto-show mode
+                if (Math.random() < 0.01) playSparkle();
+
                 autoPlayTimer--;
                 if (autoPlayTimer <= 0) {
                     launchRandomFirework();
