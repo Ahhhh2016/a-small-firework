@@ -1150,10 +1150,7 @@
             
             const trigger = document.getElementById('trigger-zone');
             const sidebar = document.getElementById('sidebar');
-            trigger.addEventListener('touchstart', () => sidebar.style.left = '0');
-            document.addEventListener('touchstart', (e) => {
-                if(e.clientX > 220) sidebar.style.left = '-220px';
-            });
+            trigger.addEventListener('pointerdown', (e) => { sidebar.style.left = '0'; e.stopPropagation(); });
         }
         
         function initAudio() {
@@ -1512,7 +1509,14 @@
             initAudio();
 
 			const sidebar = document.getElementById('sidebar');
-			if (sidebar && (sidebar.contains(event.target) || (event.clientX < 220 && getComputedStyle(sidebar).left === '0px'))) return;
+			if (sidebar) {
+				const isOpen = getComputedStyle(sidebar).left === '0px';
+				const inside = sidebar.contains(event.target);
+				if (inside || (event.clientX < 220 && isOpen)) return;
+				if (isOpen && event.clientX >= 220) {
+					sidebar.style.left = '-220px';
+				}
+			}
             
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
