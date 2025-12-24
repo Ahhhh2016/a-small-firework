@@ -27,25 +27,25 @@ A small Three.js + WebAudio + GLSL experiment (inspired by Shadertoy) featuring 
 
 - Core particle update
   - Discrete Euler integration with gravity and air drag:
-    - $ v_y \mathrel{+}= g $
-    - $ \mathbf{v} \mathrel{*}= \text{drag} $ (per-frame damping factor < 1)
-    - $ \mathbf{x} \mathrel{+}= \mathbf{v} $
-  - Continuous approximation (for intuition): $ \mathbf{x}(t) \approx \mathbf{x}_0 + \mathbf{v}_0 t e^{-k t} + \tfrac{1}{2}\mathbf{g} t^2 $.
+    - $`v_y \mathrel{+}= g`$
+    - $`\mathbf{v} \mathrel{*}= \text{drag}`$ (per-frame damping factor < 1)
+    - $`\mathbf{x} \mathrel{+}= \mathbf{v}`$
+  - Continuous approximation (for intuition): $`\mathbf{x}(t) \approx \mathbf{x}_0 + \mathbf{v}_0 t e^{-k t} + \tfrac{1}{2}\mathbf{g} t^2`$.
 
 - One Spark (type: `spark`)
   - Isotropic initial velocity (uniform on a sphere):
-    - $ \theta \sim U[0,2\pi),\ \phi = \arccos(2u-1) $, $ \mathbf{v}_0 = r[\sin\phi\cos\theta,\ \sin\phi\sin\theta,\ \cos\phi] $.
+    - $`\theta \sim U[0,2\pi),\ \phi = \arccos(2u-1)`$, $`\mathbf{v}_0 = r[\sin\phi\cos\theta,\ \sin\phi\sin\theta,\ \cos\phi]`$.
   - Medium gravity and damping; mid/late life spawns trail points to emphasize streaks.
 
 - Bloom (type: `bloom`)
   - Fibonacci sphere distribution for near-uniform directions:
-    - $ y = 1 - \frac{i}{N-1}\cdot 2,\ r=\sqrt{1-y^2},\ \theta = \varphi i $ (golden angle $\varphi$),
-      $ \mathbf{v}_0 = \text{base} \cdot (r\cos\theta,\ y,\ r\sin\theta) $.
+    - $`y = 1 - \frac{i}{N-1}\cdot 2,\ r=\sqrt{1-y^2},\ \theta = \varphi i`$ (golden angle $`\varphi`$),
+      $`\mathbf{v}_0 = \text{base} \cdot (r\cos\theta,\ y,\ r\sin\theta)`$.
   - Lower gravity and gentle damping; particle size eases in over the first ~60 frames (cubic ease).
 
 - Drift (type: `drift`)
   - Near-ring distribution with very small vertical component:
-    - $ \theta \sim U[0,2\pi),\ \mathbf{v}_0 \approx (r\cos\theta,\ \epsilon,\ r\sin\theta) $ → planar drift.
+    - $`\theta \sim U[0,2\pi),\ \mathbf{v}_0 \approx (r\cos\theta,\ \epsilon,\ r\sin\theta)`$ → planar drift.
   - Very small gravity, slightly stronger damping; an overall “lighter” drifting feel.
 
 - Scatter (type: `scatter`)
@@ -54,9 +54,9 @@ A small Three.js + WebAudio + GLSL experiment (inspired by Shadertoy) featuring 
 
 - Sparkler (handheld, shader-driven)
   - Fragment/vertex shaders blend screen-space glow streaks and noise-based detail:
-    - Burn line descends over time: $ y_\text{burn}(t) = y_0 - s t $;
+    - Burn line descends over time: $`y_\text{burn}(t) = y_0 - s t`$;
     - Emission transitions from a narrow ring-cone to isotropic;
-    - Damped ballistic path: $ \mathbf{x}(t) \approx \mathbf{x}_0 + \mathbf{v}_0 t e^{-k t} + \tfrac{1}{2}\mathbf{g}t^2 $;
+    - Damped ballistic path: $`\mathbf{x}(t) \approx \mathbf{x}_0 + \mathbf{v}_0 t e^{-k t} + \tfrac{1}{2}\mathbf{g}t^2`$;
     - Occasional sub-spark “micro-bursts” and splatter, noise-driven flicker intensity;
     - Paper/smoke grain via 3D noise, triplanar mapping, and time-animated noise.
 
@@ -123,25 +123,25 @@ A small Three.js + WebAudio + GLSL experiment (inspired by Shadertoy) featuring 
 
 - 基础运动（粒子更新）
   - 使用离散欧拉积分，包含重力与空气阻力：
-    - $ v_y \mathrel{+}= g $
-    - $ \mathbf{v} \mathrel{*}= \text{drag} $（每帧乘以 < 1 的阻尼系数）
-    - $ \mathbf{x} \mathrel{+}= \mathbf{v} $
-  - 连续近似（仅说明）：$ \mathbf{x}(t) \approx \mathbf{x}_0 + \mathbf{v}_0 t e^{-k t} + \tfrac{1}{2}\mathbf{g} t^2 $。
+    - $`v_y \mathrel{+}= g`$
+    - $`\mathbf{v} \mathrel{*}= \text{drag}`$（每帧乘以 < 1 的阻尼系数）
+    - $`\mathbf{x} \mathrel{+}= \mathbf{v}`$
+  - 连续近似（仅说明）：$`\mathbf{x}(t) \approx \mathbf{x}_0 + \mathbf{v}_0 t e^{-k t} + \tfrac{1}{2}\mathbf{g} t^2`$。
 
 - One Spark（type: `spark`）
   - 初速度各向同性采样（球面均匀）：
-    - $ \theta \sim U[0,2\pi),\ \phi = \arccos(2u-1) \)，\( \mathbf{v}_0 = r[\sin\phi\cos\theta,\ \sin\phi\sin\theta,\ \cos\phi] $。
+    - $`\theta \sim U[0,2\pi),\ \phi = \arccos(2u-1)`$，$`\mathbf{v}_0 = r[\sin\phi\cos\theta,\ \sin\phi\sin\theta,\ \cos\phi]`$。
   - 物理参数：中等重力、中等阻尼；在寿命中后期添加轨迹粒子，强调拖尾。
 
 - Bloom（type: `bloom`）
   - 使用 Fibonacci Sphere 近似均匀分布：
-    - $ y = 1 - \frac{i}{N-1}\cdot 2,\ r=\sqrt{1-y^2},\ \theta = \varphi i $ ($\varphi$ 为黄金角），
-      $ \mathbf{v}_0 = \text{base} \cdot (r\cos\theta,\ y,\ r\sin\theta) $。
+    - $`y = 1 - \frac{i}{N-1}\cdot 2,\ r=\sqrt{1-y^2},\ \theta = \varphi i`$ ($`\varphi`$ 为黄金角），
+      $`\mathbf{v}_0 = \text{base} \cdot (r\cos\theta,\ y,\ r\sin\theta)`$。
   - 物理参数：较小重力、较弱阻尼；粒子大小在前 60 帧缓入至目标尺寸（立方缓动）。
 
 - Drift（type: `drift`）
   - 初速度近似“环形”分布，垂直分量很小：
-    - $ \theta \sim U[0,2\pi),\ \mathbf{v}_0 \approx (r\cos\theta,\ \epsilon,\ r\sin\theta) $，形成平面漂移感。
+    - $`\theta \sim U[0,2\pi),\ \mathbf{v}_0 \approx (r\cos\theta,\ \epsilon,\ r\sin\theta)`$，形成平面漂移感。
   - 物理参数：重力很小、阻尼略强；整体更“轻”的漂移效果。
 
 - Scatter（type: `scatter`）
@@ -150,9 +150,9 @@ A small Three.js + WebAudio + GLSL experiment (inspired by Shadertoy) featuring 
 
 - Sparkler（手持烟花，Shader）
   - 使用片元/顶点着色器进行屏幕空间光迹混合与体感噪声，核心包含：
-    - 燃点随时间沿 $ y $ 轴向下移动：$ y_\text{burn}(t) = y_0 - s t $；
+    - 燃点随时间沿 $`y`$ 轴向下移动：$`y_\text{burn}(t) = y_0 - s t`$；
     - 发射方向从“窄环锥混入各向同性”过渡；
-    - 轨迹采用带指数阻尼的弹道近似：$ \mathbf{x}(t) \approx \mathbf{x}_0 + \mathbf{v}_0 t e^{-k t} + \tfrac{1}{2}\mathbf{g}t^2 $；
+    - 轨迹采用带指数阻尼的弹道近似：$`\mathbf{x}(t) \approx \mathbf{x}_0 + \mathbf{v}_0 t e^{-k t} + \tfrac{1}{2}\mathbf{g}t^2`$；
     - 次级“微喷/微爆”与“溅射”片段，使用噪声驱动强度与闪烁；
     - 纸张/烟雾颗粒感通过 3D 噪声、三平面贴图与时间噪声抖动塑造。
 
