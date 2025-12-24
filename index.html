@@ -578,8 +578,8 @@
                     float distToBurn = currentBurnY - pos.y; // Positive if below line
                     
                     // Narrower band for smaller central flame region
-                    if (distToBurn > -0.02 && distToBurn < 0.1) {
-                        float heat = 1.0 - smoothstep(0.0, 0.12, abs(distToBurn));
+                    if (abs(distToBurn) < 0.025) {
+                        float heat = exp(-abs(distToBurn) * 20.0);
                         
                         // Flicker noise
                         float flicker = noise(vec3(0.0, iTime * 10.0, 0.0));
@@ -593,7 +593,7 @@
                         
                         vec3 glow = mix(emberColor, brightColor, crack * 0.5);
                         
-                        col += glow * heat * 3.0;
+                        col += glow * heat * 0.9;
                     }
                 }
             }
@@ -607,8 +607,8 @@
             vec3 closestPoint = ClosestPoint(r, p);
             float dist = DistSqr(closestPoint, p)*10000.;
             size = mix(size*5., size, focus);
-            float brightness = size/dist;
-            brightness = clamp(brightness,0., 10.);
+            float brightness = size / (dist * dist);
+            brightness = clamp(brightness,0., 3.0);
             float bokeh = smoothstep(.01, .04, brightness)*saturate(dist*.005+.4)*.15;
             brightness = mix(bokeh, brightness, focus);
             return color * brightness;
@@ -644,6 +644,7 @@
                     // Lifespan sizing and flicker
                     float size = mix(8., .5, smoothstep(0., .2, life));
                     size *= smoothstep(1., .2, life);
+                    size *= smoothstep(0.0, 0.08, life);
                     float flick = noise(p * 6.0 + vec3(0.0, 0.0, iTime * 24.0));
                     size *= mix(0.85, 1.25, flick);
                     size *= SPARK_SIZE_MULT;
