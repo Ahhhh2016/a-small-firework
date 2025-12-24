@@ -579,7 +579,7 @@
                     
                     // Narrower band for smaller central flame region
                     if (abs(distToBurn) < 0.025) {
-                        float heat = exp(-abs(distToBurn) * 20.0);
+                        float heat = exp(-abs(distToBurn) * 80.0);
                         
                         // Flicker noise
                         float flicker = noise(vec3(0.0, iTime * 10.0, 0.0));
@@ -630,10 +630,11 @@
                 // Start close to the burn line with slight jitter
                 vec3 pStart = vec3(0., emissionBurnY, 0.) + (n - 0.5) * vec3(0.05, 0.02, 0.05);
                 
-                // Jet-like emission: ring-directed narrow cone with higher speed
+                // 360° uniform emission (isotropic direction over the sphere)
                 float phi = n.x * 6.28318530718; // 2 * PI
-                float vtilt = mix(0.12, -0.4, n.y); // slight upward to downward bias
-                vec3 dir = normalize(vec3(cos(phi), vtilt, sin(phi)));
+                float cosTheta = 2.0 * n.y - 1.0;
+                float sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
+                vec3 dir = normalize(vec3(cos(phi) * sinTheta, cosTheta, sin(phi) * sinTheta));
                 float speed = mix(1.6, 4.0, n.z);
                 vec3 v0 = dir * speed;
                 float drag = exp(-life * 1.2);
@@ -664,8 +665,9 @@
                             // Sub-spark ballistic path (jet-matching cone)
                             float st = saturate(within(vec2(n.z, 1.), life));
                             float phiS = ns.x * 6.28318530718;
-                            float vtiltS = mix(0.2, -0.5, ns.y);
-                            vec3 dirS = normalize(vec3(cos(phiS), vtiltS, sin(phiS)));
+                            float cosThetaS = 2.0 * ns.y - 1.0;
+                            float sinThetaS = sqrt(max(0.0, 1.0 - cosThetaS * cosThetaS));
+                            vec3 dirS = normalize(vec3(cos(phiS) * sinThetaS, cosThetaS, sin(phiS) * sinThetaS));
                             float spdS = mix(0.8, 2.2, ns.x);
                             vec3 vS = dirS * spdS;
                             vec3 sp = p + vS * st * exp(-st * 2.2) + 0.5 * gravity * (st * st);
