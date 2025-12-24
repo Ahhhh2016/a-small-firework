@@ -335,6 +335,11 @@
         // Texture cache
         let particleTexture;
 
+        // Sparkler constants (mirror shader values)
+        const SPARKLER_BURN_START_Y = 2.2;
+        const SPARKLER_BURN_SPEED = 0.25;
+        const SPARKLER_TIME_SCALE = 1.5;
+
         // --- 2. Shader Code for Sparkler ---
         // UPDATED: Visible Paper Texture & Fixed FBM overloading
         const sparklerFragmentShader = `
@@ -350,6 +355,8 @@
         #define PRIMARY_PARTICLE_COLOR vec3(1., 0.8, 0.5)
         #define SECONDARY_PARTICLE_COLOR vec3(1., 0.5, 0.3)
         #define DOF vec2(1., 1.5)
+        // Global size multiplier for sparkler particles
+        #define SPARK_SIZE_MULT 2.0
         
         // Camera Config
         #define MIN_CAM_DISTANCE 1.5
@@ -611,32 +618,73 @@
                 
                 vec3 n = hash31(fi + ft*123.324);
                 
-                vec3 pStart = vec3(0., emissionBurnY + n.y * 0.1, 0.);
-                pStart.y -= life * life * 0.6; 
+                // Start close to the burn line with slight jitter
+                vec3 pStart = vec3(0., emissionBurnY, 0.) + (n - 0.5) * vec3(0.05, 0.02, 0.05);
                 
-                vec3 pEnd = pStart + (n-.5) * vec3(1.5, 0.5, 1.5) * 4.0;
-                vec3 p = mix(pStart, pEnd, life);
+                // Initial velocity (slightly forward and outward), then apply drag and gravity
+                vec3 dir = normalize((n - 0.5) * vec3(1.0, 0.5, 1.0) + vec3(0.1, 0.0, 0.0));
+                float speed = mix(0.6, 2.2, n.x);
+                vec3 v0 = dir * speed;
+                float drag = exp(-life * 2.0);
+                vec3 gravity = vec3(0.0, -1.8, 0.0);
+                vec3 p = pStart + v0 * life * drag + 0.5 * gravity * (life * life);
                 
                 if (emissionBurnY > -3.0) {
-                    float size = mix(8., .5, smoothstep(0., .2, life)); 
-                    size *= smoothstep(1., .2, life);                  
+                    // Lifespan sizing and flicker
+                    float size = mix(8., .5, smoothstep(0., .2, life));
+                    size *= smoothstep(1., .2, life);
+                    float flick = noise(p * 6.0 + vec3(0.0, 0.0, iTime * 24.0));
+                    size *= mix(0.85, 1.25, flick);
+                    size *= SPARK_SIZE_MULT;
+                    
+                    // Color temperature progression (white-hot -> warm -> cool)
+                    vec3 hot = vec3(1.0, 0.96, 0.88);
+                    vec3 warm = vec3(1.0, 0.72, 0.28);
+                    vec3 cool = vec3(0.82, 0.32, 0.08);
+                    vec3 c1 = mix(warm, hot, smoothstep(0.0, 0.18, 1.0 - life));
+                    vec3 c2 = mix(c1, cool, smoothstep(0.5, 1.0, life));
 
+                    // Occasional micro-bursts of sub-sparks
                     if(life > n.z && abs(n.z-.55) < SUB_SPARKLE_CHANCE) {
                         for(int x=0; x<NUM_SUB_SPARKLES; x++) {
                             float fx = float(x);
                             vec3 ns = hash31(fx+fi);
-                            vec3 sStart = mix(pStart, pEnd, n.z);
-                            vec3 sEnd = sStart + (ns-.5) * 2.0;
+                            // Sub-spark ballistic path
                             float st = saturate(within(vec2(n.z, 1.), life));
-                            vec3 sp = mix(sStart, sEnd, st);
-                            size = mix(8., 0.5, smoothstep(0., .1, st));
-                            size *= smoothstep(1., .9, st);                 
-                            col += sparkle(r, sp, size, SECONDARY_PARTICLE_COLOR);
+                            vec3 dirS = normalize((ns - 0.5) * vec3(1.0, 0.8, 1.0));
+                            float spdS = mix(0.4, 1.3, ns.x);
+                            vec3 vS = dirS * spdS;
+                            vec3 sp = p + vS * st * exp(-st * 2.2) + 0.5 * gravity * (st * st);
+                            float sSize = mix(6., 0.4, smoothstep(0., .12, st));
+                            sSize *= smoothstep(1., .88, st);
+                            sSize *= SPARK_SIZE_MULT;
+                            vec3 sc = mix(warm, cool, st);
+                            col += sparkle(r, sp, sSize, sc);
                         }
                     } else {
-                         col += sparkle(r, p, size, PRIMARY_PARTICLE_COLOR);
+                         col += sparkle(r, p, size, c2);
                     }
                 }
+            }
+            return col;
+        }
+
+        // Subtle smoke rising from the burn line (low intensity, soft)
+        vec3 smokeClouds(ray r, float time, float currentBurnY) {
+            vec3 col = vec3(0.);
+            for (int i = 0; i < 12; i++) {
+                float fi = float(i);
+                float t = time * 0.5 + fi * 0.173;
+                float ft = floor(t);
+                float life = fract(t);
+                vec3 n = hash31(fi + ft * 41.31);
+                float rise = mix(0.2, 1.2, life) + n.x * 0.2;
+                vec3 jitter = (n - 0.5) * vec3(0.25, 0.15, 0.25);
+                vec3 p = vec3(0., currentBurnY + rise, 0.) + jitter;
+                float size = mix(40., 12., life);
+                float fade = (1.0 - life) * (0.35 + 0.15 * noise(p * 3.0 + vec3(0.0, 0.0, time * 1.3)));
+                vec3 smokeCol = vec3(0.34, 0.36, 0.4) * fade;
+                col += sparkle(r, p, size, smokeCol);
             }
             return col;
         }
@@ -677,11 +725,10 @@
             }
             
             vec3 spk = sparkles(cam.ray, scaledTime);
-            col += spk;
+            vec3 smk = smokeClouds(cam.ray, scaledTime, currentBurnY);
+            col += spk + smk;
             
-            col = Rainbow(col);
-            
-            float alpha = max(stick.w, min(1.0, length(spk) * 2.0));
+            float alpha = max(stick.w, min(1.0, length(spk + smk) * 1.6));
             
             gl_FragColor = vec4(col, alpha);
         }
@@ -803,7 +850,7 @@
                     transparent: true,
                     depthTest: false,
                     depthWrite: false,
-                    blending: THREE.NormalBlending 
+                    blending: THREE.AdditiveBlending 
                 });
 
                 this.mesh = new THREE.Mesh(geometry, material);
@@ -854,6 +901,24 @@
                 if (this.active && this.mesh) {
                     const elapsed = (performance.now() - this.startTime) / 1000;
                     this.mesh.material.uniforms.iTime.value = elapsed;
+                    
+                    // Vary crackle rate with emission intensity (peaks mid-burn)
+                    if (audioCtx) {
+                        const scaledTime = elapsed * SPARKLER_TIME_SCALE;
+                        const currentBurnY = SPARKLER_BURN_START_Y - scaledTime * SPARKLER_BURN_SPEED;
+                        // Intensity based on where the burn line is (higher in center region)
+                        let intensity = 0.0;
+                        {
+                            // Map Y to 0..1 roughly over stick range [-3.5, 3.5]
+                            let yNorm = (currentBurnY + 3.5) / 7.0;
+                            yNorm = Math.max(0, Math.min(1, yNorm));
+                            // Bell-like curve for mid intensity
+                            intensity = 1.0 - Math.pow((yNorm - 0.5) * 2.0, 2.0);
+                        }
+                        if (Math.random() < intensity * 0.02) {
+                            sparklerCrackle(audioCtx);
+                        }
+                    }
                 }
             }
         }
