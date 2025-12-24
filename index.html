@@ -973,6 +973,12 @@
                 this.startTime = performance.now();
                 this.mesh.material.uniforms.iTime.value = 0;
                 
+                // Lower pixel ratio during sparkler to reduce GPU load
+                if (typeof renderer !== 'undefined' && renderer) {
+                    this._prevPixelRatio = (typeof renderer.getPixelRatio === 'function') ? renderer.getPixelRatio() : Math.min(window.devicePixelRatio, 1);
+                    renderer.setPixelRatio(0.75);
+                }
+                
 				if (audioCtx) {
 					this.burnSound = startSparklerBurn(audioCtx);
 					this.soundInterval = setInterval(() => {
@@ -998,6 +1004,11 @@
 					try { this.burnSound.gain.disconnect(); } catch(e) {}
 					this.burnSound = null;
 				}
+                // Restore pixel ratio after sparkler ends
+                if (typeof renderer !== 'undefined' && renderer) {
+                    const restore = (this._prevPixelRatio != null) ? this._prevPixelRatio : Math.min(window.devicePixelRatio, 1);
+                    renderer.setPixelRatio(restore);
+                }
                 const btn = document.getElementById('opt-sparkler');
                 if (btn) btn.classList.remove('active');
             }
@@ -1108,7 +1119,7 @@
 
             renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
             container.appendChild(renderer.domElement);
 
             raycaster = new THREE.Raycaster();
