@@ -348,15 +348,22 @@
         varying vec2 vUv;
 
         // Int constants for loops
-        #define NUM_SPARKLES 100
-        #define NUM_SUB_SPARKLES 3
+        #define NUM_SPARKLES 260
+        #define NUM_SUB_SPARKLES 4
         
-        #define SUB_SPARKLE_CHANCE .4
+        #define SUB_SPARKLE_CHANCE .6
+        // Splatter jets
+        #define NUM_SPLATTER_EVENTS 3
+        #define SPLATTER_PER_EVENT 14
+        // Needle-like bright jets
+        #define NUM_NEEDLE_EVENTS 2
+        #define NEEDLES_PER_EVENT 6
+        #define NEEDLE_SAMPLES 12
         #define PRIMARY_PARTICLE_COLOR vec3(1., 0.8, 0.5)
         #define SECONDARY_PARTICLE_COLOR vec3(1., 0.5, 0.3)
         #define DOF vec2(1., 1.5)
         // Global size multiplier for sparkler particles
-        #define SPARK_SIZE_MULT 2.0
+        #define SPARK_SIZE_MULT 1.0
         
         // Camera Config
         #define MIN_CAM_DISTANCE 1.5
@@ -480,8 +487,8 @@
             float bump = mix(burnedBump, newBump, transition);
             
             // Apply bump to SDF radius
-            // Reduced radius from 0.08 to 0.04 for a thinner stick
-            float d = sdCapsule(p, vec3(0., -4., 0.), vec3(0., 4., 0.), 0.04 + bump);
+            // Further reduced radius for a thinner stick
+            float d = sdCapsule(p, vec3(0., -4., 0.), vec3(0., 4., 0.), 0.02 + bump);
             
             return vec4(d, bump, transition, 1.0);
         }
@@ -548,11 +555,12 @@
                     // Enhanced Paper Texture using Triplanar noise
                     float tex = proceduralTex3D(pos, nor, 60.0);
                     
-                    vec3 paperCol = vec3(0.85, 0.82, 0.75); // Base beige
+                    // Deep gray base for the stick
+                    vec3 paperCol = vec3(0.22, 0.22, 0.24);
                     
-                    // Fibrous texture: darker strands
+                    // Fibrous texture: subtle darker strands
                     float fibers = smoothstep(0.4, 0.7, tex);
-                    paperCol = mix(paperCol, vec3(0.75, 0.7, 0.6), fibers * 0.5);
+                    paperCol = mix(paperCol, vec3(0.16, 0.16, 0.18), fibers * 0.4);
                     
                     // Add micro grain
                     float grain = noise(pos * 150.0);
@@ -569,8 +577,9 @@
                     // --- Burning Glow Effect (Additive) ---
                     float distToBurn = currentBurnY - pos.y; // Positive if below line
                     
-                    if (distToBurn > -0.05 && distToBurn < 0.2) {
-                        float heat = 1.0 - smoothstep(0.0, 0.2, abs(distToBurn));
+                    // Narrower band for smaller central flame region
+                    if (distToBurn > -0.02 && distToBurn < 0.1) {
+                        float heat = 1.0 - smoothstep(0.0, 0.12, abs(distToBurn));
                         
                         // Flicker noise
                         float flicker = noise(vec3(0.0, iTime * 10.0, 0.0));
@@ -621,11 +630,13 @@
                 // Start close to the burn line with slight jitter
                 vec3 pStart = vec3(0., emissionBurnY, 0.) + (n - 0.5) * vec3(0.05, 0.02, 0.05);
                 
-                // Initial velocity (slightly forward and outward), then apply drag and gravity
-                vec3 dir = normalize((n - 0.5) * vec3(1.0, 0.5, 1.0) + vec3(0.1, 0.0, 0.0));
-                float speed = mix(0.6, 2.2, n.x);
+                // Jet-like emission: ring-directed narrow cone with higher speed
+                float phi = n.x * 6.28318530718; // 2 * PI
+                float vtilt = mix(0.12, -0.4, n.y); // slight upward to downward bias
+                vec3 dir = normalize(vec3(cos(phi), vtilt, sin(phi)));
+                float speed = mix(1.6, 4.0, n.z);
                 vec3 v0 = dir * speed;
-                float drag = exp(-life * 2.0);
+                float drag = exp(-life * 1.2);
                 vec3 gravity = vec3(0.0, -1.8, 0.0);
                 vec3 p = pStart + v0 * life * drag + 0.5 * gravity * (life * life);
                 
@@ -649,10 +660,12 @@
                         for(int x=0; x<NUM_SUB_SPARKLES; x++) {
                             float fx = float(x);
                             vec3 ns = hash31(fx+fi);
-                            // Sub-spark ballistic path
+                            // Sub-spark ballistic path (jet-matching cone)
                             float st = saturate(within(vec2(n.z, 1.), life));
-                            vec3 dirS = normalize((ns - 0.5) * vec3(1.0, 0.8, 1.0));
-                            float spdS = mix(0.4, 1.3, ns.x);
+                            float phiS = ns.x * 6.28318530718;
+                            float vtiltS = mix(0.2, -0.5, ns.y);
+                            vec3 dirS = normalize(vec3(cos(phiS), vtiltS, sin(phiS)));
+                            float spdS = mix(0.8, 2.2, ns.x);
                             vec3 vS = dirS * spdS;
                             vec3 sp = p + vS * st * exp(-st * 2.2) + 0.5 * gravity * (st * st);
                             float sSize = mix(6., 0.4, smoothstep(0., .12, st));
@@ -669,6 +682,44 @@
             return col;
         }
 
+        // Splatter jets: short, wide-angle bursts around the burn line
+        vec3 splatterSparks(ray r, float time) {
+            vec3 col = vec3(0.);
+            for (int i = 0; i < NUM_SPLATTER_EVENTS; i++) {
+                float fi = float(i);
+                float t = time * 0.8 + fi * 0.27;
+                float ft = floor(t);
+                float life = fract(t);
+                
+                float emissionBurnY = BURN_START_Y - (time - life) * BURN_SPEED; 
+                vec3 n = hash31(fi + ft * 67.19);
+                vec3 pStart = vec3(0., emissionBurnY, 0.) + (n - 0.5) * vec3(0.04, 0.02, 0.04);
+                vec3 gravity = vec3(0.0, -1.8, 0.0);
+                
+                for (int j = 0; j < SPLATTER_PER_EVENT; j++) {
+                    float fj = float(j);
+                    vec3 n2 = hash31(fi * 31.0 + fj * 13.0 + ft * 19.0);
+                    
+                    // Wide horizontal cone, slight downward bias (splatter)
+                    vec3 dir = normalize(vec3(n2.x * 2.0 - 1.0, mix(0.25, -0.45, n2.y), n2.z * 2.0 - 1.0) * vec3(1.8, 1.0, 1.8));
+                    float spd = mix(1.2, 3.2, n2.z);
+                    float drag = exp(-life * 1.6);
+                    vec3 p = pStart + dir * spd * life * drag + 0.5 * gravity * (life * life);
+                    
+                    // Size and color progression
+                    float s = mix(5., 0.4, smoothstep(0., 0.22, life));
+                    s *= smoothstep(1., .2, life);
+                    s *= SPARK_SIZE_MULT;
+                    
+                    vec3 warm = vec3(1.0, 0.72, 0.28);
+                    vec3 cool = vec3(0.82, 0.32, 0.08);
+                    vec3 c = mix(warm, cool, life);
+                    
+                    col += sparkle(r, p, s, c);
+                }
+            }
+            return col;
+        }
         // Subtle smoke rising from the burn line (low intensity, soft)
         vec3 smokeClouds(ray r, float time, float currentBurnY) {
             vec3 col = vec3(0.);
@@ -689,6 +740,49 @@
             return col;
         }
 
+        // Needle-like bright jets: short, thin, high-brightness streaks
+        vec3 needleJets(ray r, float time, float currentBurnY) {
+            vec3 col = vec3(0.);
+            for (int i = 0; i < NUM_NEEDLE_EVENTS; i++) {
+                float fi = float(i);
+                float t = time * 1.1 + fi * 0.41;
+                float ft = floor(t);
+                float life = fract(t);
+                vec3 n = hash31(fi + ft * 91.73);
+                vec3 pStart = vec3(0., currentBurnY, 0.) + (n - 0.5) * vec3(0.03, 0.02, 0.03);
+                
+                // Narrow ring-directed cone
+                float phi = n.x * 6.28318530718;
+                float vtilt = mix(0.02, -0.28, n.y);
+                vec3 dir = normalize(vec3(cos(phi), vtilt, sin(phi)));
+                
+                float spd = mix(2.0, 4.5, n.z);
+                float drag = exp(-life * 1.0);
+                vec3 gravity = vec3(0.0, -1.8, 0.0);
+                vec3 p0 = pStart + dir * spd * life * drag + 0.5 * gravity * (life * life);
+                
+                for (int j = 0; j < NEEDLES_PER_EVENT; j++) {
+                    float fj = float(j);
+                    vec3 n2 = hash31(fi * 37.0 + fj * 17.0 + ft * 23.0);
+                    // Slight spread per-needle
+                    float spread = mix(0.06, 0.18, n2.y);
+                    vec3 d = normalize(dir + (n2 - 0.5) * vec3(spread, spread * 0.5, spread));
+                    
+                    // Draw a short segment along direction as multiple bright points
+                    for (int s = 0; s < NEEDLE_SAMPLES; s++) {
+                        float fs = float(s) / float(NEEDLE_SAMPLES - 1);
+                        float seg = mix(0.0, 0.28, fs);
+                        vec3 ps = p0 + d * seg;
+                        float sSize = mix(4.8, 1.0, fs) * SPARK_SIZE_MULT;
+                        // Hot white-y color
+                        vec3 c = vec3(1.0, 0.95, 0.82);
+                        // Slight extra boost for needles
+                        col += sparkle(r, ps, sSize, c) * 1.15;
+                    }
+                }
+            }
+            return col;
+        }
         vec3 Rainbow(vec3 c) {
             float t=iTime;
             c += sin(vec3(.4, .3, .3)*t + vec3(1.1244,3.43215,6.435))*vec3(.4, .1, .5);
@@ -725,10 +819,12 @@
             }
             
             vec3 spk = sparkles(cam.ray, scaledTime);
+            vec3 spl = splatterSparks(cam.ray, scaledTime);
+            vec3 ndl = needleJets(cam.ray, scaledTime, currentBurnY);
             vec3 smk = smokeClouds(cam.ray, scaledTime, currentBurnY);
-            col += spk + smk;
+            col += spk + spl + ndl + smk;
             
-            float alpha = max(stick.w, min(1.0, length(spk + smk) * 1.6));
+            float alpha = max(stick.w, min(1.0, length(spk + spl + ndl + smk) * 1.5));
             
             gl_FragColor = vec4(col, alpha);
         }
