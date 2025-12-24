@@ -75,23 +75,24 @@
         }
 
         .menu-title {
-            text-align: center;
+			text-align: right;
             font-size: 1.3rem;
             letter-spacing: 1px;
             color: rgba(255, 255, 255, 0.9);
             margin-bottom: 5px;
             text-transform: uppercase;
             font-weight: 600;
+			padding-right: 20px;
         }
 
         .menu-tagline {
-            text-align: center;
+			text-align: right;
             font-size: 1.0rem;
             color: rgba(255, 255, 255, 0.5);
             margin-bottom: 25px;
             font-style: italic;
             font-family: 'Cuprum', sans-serif;
-            padding: 0 10px;
+			padding: 0 20px 0 0;
         }
 
         /* Transparent Buttons */
@@ -1310,7 +1311,8 @@
         function onPointerDown(event) {
             initAudio();
 
-            if (event.clientX < 220 && document.getElementById('sidebar').style.left === '0px') return;
+			const sidebar = document.getElementById('sidebar');
+			if (sidebar && (sidebar.contains(event.target) || (event.clientX < 220 && getComputedStyle(sidebar).left === '0px'))) return;
             
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
