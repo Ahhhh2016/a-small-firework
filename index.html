@@ -630,11 +630,17 @@
                 // Start close to the burn line with slight jitter
                 vec3 pStart = vec3(0., emissionBurnY, 0.) + (n - 0.5) * vec3(0.05, 0.02, 0.05);
                 
-                // 360° uniform emission (isotropic direction over the sphere)
+                // 360° uniform emission (isotropic) blended from an initial ring-like ignition
                 float phi = n.x * 6.28318530718; // 2 * PI
                 float cosTheta = 2.0 * n.y - 1.0;
                 float sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
-                vec3 dir = normalize(vec3(cos(phi) * sinTheta, cosTheta, sin(phi) * sinTheta));
+                vec3 dirIso = normalize(vec3(cos(phi) * sinTheta, cosTheta, sin(phi) * sinTheta));
+                // Ring-directed early ignition (slight upward-to-downward bias like before)
+                float vtilt = mix(0.12, -0.4, n.y);
+                vec3 dirRing = normalize(vec3(cos(phi), vtilt, sin(phi)));
+                // Blend factor: 0 at ignition -> 1 as life grows (keep early ignition look)
+                float f = smoothstep(0.0, 0.10, life);
+                vec3 dir = normalize(mix(dirRing, dirIso, f));
                 float speed = mix(1.6, 4.0, n.z);
                 vec3 v0 = dir * speed;
                 float drag = exp(-life * 1.2);
