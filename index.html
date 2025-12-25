@@ -271,6 +271,23 @@
             box-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
         }
 
+        /* Subtle footer at the bottom of sidebar */
+        .sidebar-footer {
+            margin: 10px 20px 18px 20px;
+            margin-top: auto;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.35);
+            text-align: right;
+        }
+        .sidebar-footer a {
+            color: inherit;
+            text-decoration: none;
+        }
+        .sidebar-footer a:hover {
+            color: rgba(255, 255, 255, 0.6);
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
     </style>
 </head>
 <body>
@@ -301,6 +318,9 @@
         <div class="volume-control">
             <div class="volume-label">Volume</div>
             <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        <div class="sidebar-footer">
+            <a href="https://github.com/Ahhhh2016" target="_blank" rel="noopener noreferrer">Made by Ahhhh2016</a>
         </div>
     </div>
 
